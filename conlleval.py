@@ -200,6 +200,7 @@ def end_of_chunk(prev_tag, tag, prev_type, type_):
     if prev_tag == 'E' and tag == 'E': chunk_end = True
     if prev_tag == 'E' and tag == 'I': chunk_end = True
     if prev_tag == 'E' and tag == 'O': chunk_end = True
+    if prev_tag == 'E' and tag == 'B': chunk_end = True
     if prev_tag == 'I' and tag == 'O': chunk_end = True
 
     if prev_tag != 'O' and prev_tag != '.' and prev_type != type_:
@@ -223,6 +224,7 @@ def start_of_chunk(prev_tag, tag, prev_type, type_):
 
     if prev_tag == 'E' and tag == 'E': chunk_start = True
     if prev_tag == 'E' and tag == 'I': chunk_start = True
+    if prev_tag == 'E' and tag == 'B': chunk_start = True
     if prev_tag == 'O' and tag == 'E': chunk_start = True
     if prev_tag == 'O' and tag == 'I': chunk_start = True
 
