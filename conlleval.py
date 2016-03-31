@@ -12,12 +12,14 @@
 import sys
 import re
 
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 
 ANY_SPACE = '<SPACE>'
 
 class FormatError(Exception):
     pass
+
+Metrics = namedtuple('Metrics', 'tp fp fn prec rec fscore')
 
 class EvalCounts(object):
     def __init__(self):
@@ -133,59 +135,53 @@ def evaluate(iterable, options=None):
 
     return counts
 
+def uniq(iterable):
+  seen = set()
+  return [i for i in iterable if not (i in seen or seen.add(i))]
+
+def calculate_metrics(correct, guessed, total):
+    tp, fp, fn = correct, guessed-correct, total-correct
+    p = 0 if tp + fp == 0 else 1.*tp / (tp + fp)
+    r = 0 if tp + fn == 0 else 1.*tp / (tp + fn)
+    f = 0 if p + r == 0 else 2 * p * r / (p + r)
+    return Metrics(tp, fp, fn, p, r, f)
+
+def metrics(counts):
+    c = counts
+    overall = calculate_metrics(
+        c.correct_chunk, c.found_guessed, c.found_correct
+    )
+    by_type = {}
+    for t in uniq(c.t_found_correct.keys() + c.t_found_guessed.keys()):
+        by_type[t] = calculate_metrics(
+            c.t_correct_chunk[t], c.t_found_guessed[t], c.t_found_correct[t]
+        )
+    return overall, by_type
+
 def report(counts, out=None):
     if out is None:
         out = sys.stdout
-    c = counts
-    if c.found_guessed > 0:
-        precision = 100.*c.correct_chunk/c.found_guessed
-    else:
-        precision = 0
-    if c.found_correct > 0:
-        recall = 100.*c.correct_chunk/c.found_correct
-    if precision + recall > 0:
-        fb1 = 2 * precision * recall / (precision + recall)
-    else:
-        fb1 = 0
 
-    # overall performance
+    overall, by_type = metrics(counts)
+
+    c = counts
     out.write('processed %d tokens with %d phrases; ' %
               (c.token_counter, c.found_correct))
     out.write('found: %d phrases; correct: %d.\n' %
               (c.found_guessed, c.correct_chunk))
+
     if c.token_counter > 0:
-        out.write('accuracy: %6.2f%%; ' % (100.*c.correct_tags/c.token_counter))
-        out.write('precision: %6.2f%%; ' % precision)
-        out.write('recall: %6.2f%%; ' % recall)
-        out.write('FB1: %6.2f\n' % fb1)
+        out.write('accuracy: %6.2f%%; ' %
+                  (100.*c.correct_tags/c.token_counter))
+        out.write('precision: %6.2f%%; ' % (100.*overall.prec))
+        out.write('recall: %6.2f%%; ' % (100.*overall.rec))
+        out.write('FB1: %6.2f\n' % (100.*overall.fscore))
 
-    # sort chunk type names
-    last_type = None
-    sorted_types = []
-    for i in sorted(c.t_found_correct.keys() +
-                    c.t_found_guessed.keys()):
-        if i != last_type:
-            sorted_types.append(i)
-        last_type = i
-
-    # performance per chunk type
-    for i in sorted_types:
-        if not c.t_found_guessed[i]:
-            precision = 0
-        else:
-            precision = 100. * c.t_correct_chunk[i] / c.t_found_guessed[i]
-        if not c.t_found_correct[i]:
-            recall = 0
-        else:
-            recall = 100. * c.t_correct_chunk[i] / c.t_found_correct[i]
-        if precision + recall == 0:
-            fb1 = 0
-        else:
-            fb1 = 2 * precision * recall / (precision + recall)
+    for i, m in sorted(by_type.items()):
         out.write('%17s: ' % i)
-        out.write('precision: %6.2f%%; ' % precision)
-        out.write('recall: %6.2f%%; ' % recall)
-        out.write('FB1: %6.2f  %d\n' % (fb1, c.t_found_guessed[i]))
+        out.write('precision: %6.2f%%; ' % (100.*m.prec))
+        out.write('recall: %6.2f%%; ' % (100.*m.rec))
+        out.write('FB1: %6.2f  %d\n' % (100.*m.fscore, c.t_found_guessed[i]))
 
 def end_of_chunk(prev_tag, tag, prev_type, type_):
     # check if a chunk ended between the previous and current word
