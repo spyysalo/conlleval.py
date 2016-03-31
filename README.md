@@ -6,6 +6,7 @@ Original (perl): http://www.cnts.ua.ac.be/conll2000/chunking/conlleval.txt
 
 Intentional differences:
 
+- IOBES support
 - accept any space as delimiter by default
 - optional file argument (default STDIN)
 - option to set boundary (-b argument)
